@@ -1,0 +1,23 @@
+/* SPDX-FileCopyrightText: 2024 ETH Zurich and University of Bologna */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/*
+ * Common linker header included by all binaries.
+ *
+ * Defines the shared 'memisl' memory region, which is visible to both the
+ * host (CVA6) and all device accelerators via the AXI interconnect.  Each
+ * binary places its '.common' section here so that shared data lives at the
+ * same physical address (ORIGIN(memisl) = 0x48000000) on every core.
+ *
+ * Usage
+ * -----
+ * Host link.ld  : INCLUDE this file; map '.common' into memisl (loads data)
+ * Device link.ld: INCLUDE this file; map '.common' into memisl as (NOLOAD)
+ *                 Then add a device-private MEMORY block (e.g. l1_tcdm).
+ */
+
+ENTRY(_start)
+
+MEMORY {
+  memisl (rwx) : ORIGIN = 0x48000000, LENGTH = 256K
+}

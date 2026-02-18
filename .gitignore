@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2024 ETH Zurich and University of Bologna
+# SPDX-License-Identifier: Apache-2.0
+
+*~
+.ninja*
+**/build*/
+.DS_Store
+
+.vscode/settings.json
+
+# Python
+.venv
+venv
+__pycache__
+
+# Documentation
+docs/_build*
+docs/_autosummary
+
+# Dept Install Dir
+install
+toolchain
