@@ -1,21 +1,18 @@
 // SPDX-FileCopyrightText: 2024 ETH Zurich and University of Bologna
 // SPDX-License-Identifier: Apache-2.0
 
-// Simplified startup code for Snitch Cluster device
+// Simplified startup code for Snitch Cluster device.
+//
+// NOTE: The global pointer (gp) and stack pointer (sp) are NOT initialised
+// here.  The host programs the cluster's boot address, gp, and sp into the
+// cluster control registers before releasing the core.  This keeps the
+// startup code minimal and lets the host decide the runtime parameters.
 
 .section .init
 .global _start
 _start:
-    // Initialize global pointer
-    .option push
-    .option norelax
-    la gp, __global_pointer$
-    .option pop
-
-    // Initialize stack pointer
-    la sp, __stack_pointer$
-
-    // Clear integer registers
+    // Clear integer registers (except gp/sp set by host, and x0 which is
+    // hardwired to zero)
     mv t0, x0
     mv t1, x0
     mv t2, x0
@@ -78,23 +75,12 @@ _start:
     fcvt.d.w f30, zero
     fcvt.d.w f31, zero
 
-    // Zero .bss section
-    la t0, __bss_start
-    la t1, __bss_end
-    sub t2, t1, t0
-    beqz t2, _call_main
 
-_zero_bss:
-    sw zero, 0(t0)
-    addi t0, t0, 4
-    addi t2, t2, -4
-    bnez t2, _zero_bss
-
-_call_main:
-    // Call main function
-    call device_main
+__call_main:
+    // Call device main function
+    call main
 
     // Park core after main returns
-_end:
+__end:
     wfi
-    j _end
+    j __call_main

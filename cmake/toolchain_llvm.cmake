@@ -58,9 +58,4 @@ add_compile_options("--target=${CROSS_COMPILE_HOST}")
 
 add_compile_options(-ggdb -gdwarf-4 -gstrict-dwarf)
 
-# message(STATUS "[CHIMERA-SDK] Linking compiler-rt builtins for RV32HOST")
-# Prefer compiler-rt rather than libgcc
-add_link_options("-rtlib=compiler-rt")
-add_link_options("-nostdlib")
-
 include_directories(${CMAKE_BINARY_DIR}/picolibc-install/include)

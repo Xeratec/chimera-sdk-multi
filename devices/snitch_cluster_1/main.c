@@ -10,16 +10,16 @@
  */
 chimera_shared_data_t shared_data __attribute__((section(".common")));
 
-int device_main(void) {
-    /* Wait for host to signal work is ready */
-    while (!shared_data.host_to_device_flag)
+int main(void) {
+    /* Wait for host to signal that work is ready for cluster 1 */
+    while (!shared_data.host_to_device_flag[1])
         ;
 
-    /* Process data and write result */
-    shared_data.data_payload[0] = 42;
+    /* Process data and write result into cluster 1's payload slot */
+    shared_data.data_payload[1][0] = 84;
 
-    /* Signal host that processing is done */
-    shared_data.device_to_host_flag = 1;
+    /* Signal host that cluster 1 is done */
+    shared_data.device_to_host_flag[1] = 1;
 
     return 0;
 }

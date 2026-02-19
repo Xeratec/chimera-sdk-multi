@@ -1,0 +1,92 @@
+/* SPDX-FileCopyrightText: 2024 ETH Zurich and University of Bologna */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/*
+ * Snitch Cluster device linker script template.
+ *
+ * cmake/ChimeraUtils.cmake calls configure_file() on this template to produce
+ * the actual linker script used at link time.  The two placeholders below are
+ * substituted automatically based on the PREV_DEVICE argument passed to
+ * add_device_binary():
+ *
+ *   CHIMERA_PREV_INCLUDE
+ *       Empty when this is the first device in the chain, or
+ *       "INCLUDE <prev>_placement.ldh" otherwise.
+ *
+ *   CHIMERA_RESERVED_SECTION
+ *       Empty when this is the first device, or a NOLOAD .reserved section
+ *       that advances the location counter past the previous device's memory
+ *       region so this device's sections are placed immediately after it.
+ *
+ * Memory layout in memisl (ORIGIN = 0x48000000, LENGTH = 256K):
+ *
+ *   0x48000000              ┌─ .common    (NOLOAD – host initialises here)
+ *   [prev device end]       ├─ .got / .init / .text / .rodata / .data
+ *                           ├─ .bss       (NOLOAD)
+ *                           ├─ .stack     (NOLOAD – 2 KiB)
+ *   __device_end            └─ 4 KiB-aligned end → ${TARGET}_placement.ldh
+ *
+ * The host sets __stack_pointer$ and __global_pointer$ in the cluster control
+ * registers before releasing the core; crt0.S does NOT initialise them.
+ */
+
+INCLUDE common.ldh
+@CHIMERA_PREV_INCLUDE@
+
+__global_pointer$ = ADDR(.data) + SIZEOF(.data) / 2;
+
+SECTIONS {
+  /DISCARD/ : { *(.riscv.attributes) *(.comment) }
+
+  /*
+   * Shared communication area mapped at the start of memisl (0x48000000).
+   * NOLOAD: the host binary owns and initialises this memory; the device
+   * accesses it via the AXI interconnect at the same physical address.
+   */
+  .common (NOLOAD) : ALIGN(64) {
+    __common_start = .;
+    *(.common)
+    *(.common.*)
+    . = ALIGN(64);
+    __common_end = .;
+  } > memisl
+
+@CHIMERA_RESERVED_SECTION@
+
+  .init : {
+    *(.init)
+    *(.init.*)
+  } > memisl
+
+  .text : {
+    *(.text)
+    *(.text.*)
+  } > memisl
+
+  .rodata : ALIGN(16) {
+    *(.rodata)
+    *(.rodata.*)
+    *(.srodata)
+    *(.srodata.*)
+  } > memisl
+
+  .data : ALIGN(16) {
+    *(.data)
+    *(.data.*)
+    *(.sdata)
+    *(.sdata.*)
+  } > memisl
+
+  .bss (NOLOAD) : {
+    . = ALIGN(16);
+    __bss_start = .;
+    *(.bss)
+    *(.bss.*)
+    *(.sbss)
+    *(.sbss.*)
+    . = ALIGN(16);
+    __bss_end = .;
+  } > memisl
+
+  __device_end = ALIGN(0x1000);
+}

@@ -20,9 +20,10 @@ project(chimera-sdk-multi LANGUAGES C ASM)
 
 # Add CMake helper modules
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts)
 
 # Include helper functions
-include(ChimeraUtils)
+include(Chimera)
 
 # Set common include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/common)
@@ -31,22 +32,21 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/common)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_link_options(
-    -L${CMAKE_CURRENT_SOURCE_DIR}/common
+    -L${CMAKE_CURRENT_SOURCE_DIR}/common   # for common.ldh
+    -L${CMAKE_BINARY_DIR}                  # for host_placement.ldh (generated)
 )
 
 # Print build information
 message(STATUS "========================================")
 message(STATUS "Chimera SDK Multi-Binary Build")
 message(STATUS "========================================")
-message(STATUS "Host ISA:              ${ISA_HOST}")
-message(STATUS "Host ABI:              ${ABI_HOST}")
-message(STATUS "Device ISA:            ${ISA_DEVICE}")
-message(STATUS "Device ABI:            ${ABI_DEVICE}")
-message(STATUS "========================================")
 
 # Build order:
-# 1. Build device binaries first (with PIC)
-add_subdirectory(devices/snitch_cluster)
+# 1. Build device binaries first in chain order.
+#    snitch_cluster_1 is placed immediately after snitch_cluster_0 in memisl.
+add_subdirectory(devices/snitch_cluster_0)
+add_subdirectory(devices/snitch_cluster_1)
 
-# 2. Build host binary (linking with device symbols)
+# 2. Build host binary after all devices are known.
+#    The host is placed immediately after snitch_cluster_1 in memisl.
 add_subdirectory(host)
