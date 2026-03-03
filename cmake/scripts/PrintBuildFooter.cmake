@@ -59,4 +59,14 @@ if(_n_bins GREATER 0)
     endforeach()
 endif()
 
+# Optional: show the unified ELF when it was generated
+if(DEFINED CHIMERA_UNIFIED_ELF AND CHIMERA_UNIFIED_ELF)
+    message(STATUS "[CHIMERA] =========================================")
+    if(DEFINED CHIMERA_UNIFIED_ELF_PATH AND EXISTS "${CHIMERA_UNIFIED_ELF_PATH}")
+        message(STATUS "[CHIMERA]   Unified ELF:         ${CHIMERA_UNIFIED_ELF_PATH}")
+    else()
+        message(STATUS "[CHIMERA]   Unified ELF:         (not found — merge may have failed)")
+    endif()
+endif()
+
 message(STATUS "[CHIMERA] =========================================")

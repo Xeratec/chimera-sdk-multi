@@ -41,7 +41,6 @@ string(REGEX MATCH "^[0-9]+" LLVM_VERSION_MAJOR ${LLVM_VERSION})
 string(REGEX MATCH "[0-9]+$" LLVM_VERSION_MINOR ${LLVM_VERSION})
 string(REGEX MATCH "[0-9]+$" LLVM_VERSION_PATCH ${LLVM_VERSION})
 
-message(STATUS "[CHIMERA-SDK] Detected LLVM version : ${LLVM_VERSION}")
 if(LLVM_VERSION_MAJOR LESS 16)
     message(STATUS "[CHIMERA-SDK] Disable linker relaxation for LLVM < 16")
     set(CMAKE_ALT_C_OPTIONS "-mno-relax")

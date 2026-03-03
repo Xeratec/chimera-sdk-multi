@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 ETH Zurich and University of Bologna
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "chimera-sdk-multi"
+version = "0.1.0"
+readme = "README.md"
+description = "Build tools for Chimera SDK"
+authors = [
+    { name = "Philip Wiese", email = "wiesep@iis.ee.ethz.ch" },
+]
+requires-python = ">=3.9"
+dependencies = [
+    "lief>=0.14.0",
+]
+
+[tool.uv]
+dev-dependencies = []

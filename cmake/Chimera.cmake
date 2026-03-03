@@ -38,13 +38,17 @@ function(add_device_binary TARGET_NAME)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-    message(STATUS "[CHIMERA] Device: ${TARGET_NAME}")
-    message(STATUS "          ISA=${ARG_ISA}  ABI=${ARG_ABI}  CC=${ARG_COMPILER}")
+    message(STATUS "[CHIMERA] Device (${TARGET_NAME})")
+    message(STATUS "[CHIMERA]    ISA / ABI    : ${ARG_ISA} / ${ARG_ABI}")
+    message(STATUS "[CHIMERA]    Compiler     : ${ARG_COMPILER}")
+    message(STATUS "[CHIMERA]    Compiler-rt  : ${ARG_COMPIERT_RT}")
     if(ARG_PREV_DEVICE)
-        message(STATUS "          placed after: ${ARG_PREV_DEVICE}")
+        message(STATUS "[CHIMERA]    -> placed after: ${ARG_PREV_DEVICE}")
     else()
-        message(STATUS "          first device in chain")
+        message(STATUS "[CHIMERA]    -> first device in chain")
     endif()
+    message(STATUS "[CHIMERA] ------------------------------------------------------------")
+
 
     # -----------------------------------------------------------------------
     # 1. Generate the linker script from the user's template.
@@ -212,14 +216,19 @@ function(add_device_binary TARGET_NAME)
     )
 
     # -----------------------------------------------------------------------
-    # 8. Register this binary's section file for the overlap checker
+    # 8. Register this binary's paths for the post-build checkers.
+    #    Three parallel global lists (index-aligned):
+    #      CHIMERA_BINARY_NAMES   display name
+    #      CHIMERA_SECTION_FILES  llvm-objdump -h output (for overlap checker)
+    #      CHIMERA_ELF_FILES      built ELF           (for ELF merger)
+    #      CHIMERA_DUMP_TARGETS   CMake target that produces the .dump/.sections
     # -----------------------------------------------------------------------
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_BINARY_NAMES   "${TARGET_NAME}")
     set_property(GLOBAL APPEND PROPERTY CHIMERA_SECTION_FILES
         "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.sections")
-    set_property(GLOBAL APPEND PROPERTY CHIMERA_BINARY_NAMES  "${TARGET_NAME}")
-    # Store the named CMake target (not a relative file path) so that
-    # chimera_check_overlaps can reference it from any subdirectory.
-    set_property(GLOBAL APPEND PROPERTY CHIMERA_DUMP_TARGETS  "${TARGET_NAME}")
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_ELF_FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.elf")
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_DUMP_TARGETS   "${TARGET_NAME}")
 
     # -----------------------------------------------------------------------
     # 9. Top-level convenience target
@@ -252,9 +261,12 @@ endfunction()
 #                             Used to form "INCLUDE snitch_cluster_1_placement.ldh"
 #                             and "__snitch_cluster_1_end" in the script.
 #
-# After building the host binary this function creates a
-# chimera_check_overlaps target that prints a memory map and checks for
-# section overlaps across all registered binaries.
+# Post-build targets created by this function:
+#   chimera_check_overlaps   prints memory map + checks for VMA conflicts
+#                            (Python script; replaces CMake-only implementation)
+#   chimera_merge_elf        (optional, requires CHIMERA_UNIFIED_ELF=ON)
+#                            merges all ELFs into one file using lief
+#   chimera_footer           prints the build summary
 # ---------------------------------------------------------------------------
 function(add_host_binary TARGET_NAME)
     set(oneValueArgs   LINKER_SCRIPT LAST_DEVICE ISA ABI COMPILER COMPIERT_RT)
@@ -279,9 +291,13 @@ function(add_host_binary TARGET_NAME)
         message(WARNING "Compiler-rt not specified for host binary ${TARGET_NAME}, falling back to ${ARG_COMPIERT_RT}")
     endif()
 
-    message(STATUS "[CHIMERA] Host:   ${TARGET_NAME}")
-    message(STATUS "          ISA=${ARG_ISA}  ABI=${ARG_ABI}  CC=${ARG_COMPILER}")
-    message(STATUS "          placed after: ${ARG_LAST_DEVICE}")
+    message(STATUS "[CHIMERA] Host (${TARGET_NAME})")
+    message(STATUS "[CHIMERA]    ISA / ABI    : ${ARG_ISA} / ${ARG_ABI}")
+    message(STATUS "[CHIMERA]    Compiler     : ${ARG_COMPILER}")
+    message(STATUS "[CHIMERA]    Compiler-rt  : ${ARG_COMPIERT_RT}")
+    message(STATUS "[CHIMERA]    -> placed after: ${ARG_LAST_DEVICE}")
+    message(STATUS "[CHIMERA] ------------------------------------------------------------")
+
 
     # -----------------------------------------------------------------------
     # 1. Generate the host linker script from template
@@ -361,42 +377,121 @@ function(add_host_binary TARGET_NAME)
     )
 
     # -----------------------------------------------------------------------
-    # 6. Register host section file and create the overlap-check target
+    # 6. Register host binary paths (parallel to device registrations in
+    #    add_device_binary step 8).
     # -----------------------------------------------------------------------
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_BINARY_NAMES   "${TARGET_NAME}")
     set_property(GLOBAL APPEND PROPERTY CHIMERA_SECTION_FILES
         "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.sections")
-    set_property(GLOBAL APPEND PROPERTY CHIMERA_BINARY_NAMES  "${TARGET_NAME}")
-    set_property(GLOBAL APPEND PROPERTY CHIMERA_DUMP_TARGETS  "${TARGET_NAME}")
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_ELF_FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}.elf")
+    set_property(GLOBAL APPEND PROPERTY CHIMERA_DUMP_TARGETS   "${TARGET_NAME}")
 
-    get_property(ALL_SECTION_FILES GLOBAL PROPERTY CHIMERA_SECTION_FILES)
-    get_property(ALL_BINARY_NAMES  GLOBAL PROPERTY CHIMERA_BINARY_NAMES)
-    get_property(ALL_DUMP_TARGETS  GLOBAL PROPERTY CHIMERA_DUMP_TARGETS)
+    # -----------------------------------------------------------------------
+    # 7. Read all registered binary information.
+    # -----------------------------------------------------------------------
+    get_property(ALL_BINARY_NAMES   GLOBAL PROPERTY CHIMERA_BINARY_NAMES)
+    get_property(ALL_SECTION_FILES  GLOBAL PROPERTY CHIMERA_SECTION_FILES)
+    get_property(ALL_ELF_FILES      GLOBAL PROPERTY CHIMERA_ELF_FILES)
+    get_property(ALL_DUMP_TARGETS   GLOBAL PROPERTY CHIMERA_DUMP_TARGETS)
 
-    # Write the section-file list to a cmake file so the overlap-check script
-    # can read it without dealing with semicolons in COMMAND arguments.
+    list(LENGTH ALL_BINARY_NAMES _n_bins)
+
+    # -----------------------------------------------------------------------
+    # 8. Write chimera_section_files.cmake (still used by PrintBuildFooter).
+    # -----------------------------------------------------------------------
     set(CHIMERA_LISTS_FILE "${CMAKE_BINARY_DIR}/chimera_section_files.cmake")
     file(WRITE "${CHIMERA_LISTS_FILE}"
-        "# Auto-generated by ChimeraUtils.cmake - do not edit\n"
-        "set(SECTION_FILES \"${ALL_SECTION_FILES}\")\n"
+        "# Auto-generated by Chimera.cmake — do not edit\n"
         "set(BINARY_NAMES  \"${ALL_BINARY_NAMES}\")\n"
+        "set(SECTION_FILES \"${ALL_SECTION_FILES}\")\n"
+        "set(ELF_FILES     \"${ALL_ELF_FILES}\")\n"
     )
 
+    # -----------------------------------------------------------------------
+    # 9. Build --binary <name> <file> argument list for the overlap checker.
+    # -----------------------------------------------------------------------
+    set(_check_args "")
+    math(EXPR _last_idx "${_n_bins} - 1")
+    foreach(_i RANGE ${_last_idx})
+        list(GET ALL_SECTION_FILES ${_i} _sf)
+        list(APPEND _check_args "--binary" "${_sf}")
+    endforeach()
+
+    # -----------------------------------------------------------------------
+    # 10. chimera_check_overlaps — Python overlap checker (replaces the
+    #     former CMake-only CheckSectionOverlaps.cmake invocation).
+    # -----------------------------------------------------------------------
     add_custom_target(chimera_check_overlaps ALL
-        COMMAND ${CMAKE_COMMAND}
-                    -D "CHIMERA_LISTS_FILE=${CHIMERA_LISTS_FILE}"
-                    -P "${CMAKE_SOURCE_DIR}/cmake/scripts/CheckSectionOverlaps.cmake"
-        DEPENDS ${ALL_DUMP_TARGETS}
-        COMMENT "[CHIMERA] Checking memory layout for section overlaps"
+        COMMAND
+            "${CHIMERA_UV}" run
+            python "${CMAKE_SOURCE_DIR}/scripts/check_section_overlaps.py"
+            ${_check_args}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        DEPENDS           ${ALL_DUMP_TARGETS}
+        COMMENT           "[CHIMERA] Checking memory layout for section overlaps"
         VERBATIM
     )
 
+    # -----------------------------------------------------------------------
+    # 11. (Optional) chimera_merge_elf — unified mixed-ISA ELF via lief.
+    #     Enabled when CHIMERA_UNIFIED_ELF=ON at configure time.
+    # -----------------------------------------------------------------------
+    set(_footer_dep chimera_check_overlaps)
+
+    if(CHIMERA_UNIFIED_ELF)
+        set(UNIFIED_ELF "${CMAKE_BINARY_DIR}/chimera_unified.elf")
+
+        # Build --host / --device argument list
+        set(_merge_args "")
+        foreach(_i RANGE ${_last_idx})
+            list(GET ALL_BINARY_NAMES ${_i} _name)
+            list(GET ALL_ELF_FILES    ${_i} _ef)
+            if(_name STREQUAL "${TARGET_NAME}")
+                list(APPEND _merge_args "--host" "${_ef}")
+            else()
+                list(APPEND _merge_args "--device" "${_ef}")
+            endif()
+        endforeach()
+        list(APPEND _merge_args "--output" "${UNIFIED_ELF}")
+
+        add_custom_target(chimera_merge_elf ALL
+            COMMAND
+                "${CHIMERA_UV}" run
+                python "${CMAKE_SOURCE_DIR}/scripts/merge_elf.py"
+                ${_merge_args}
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            DEPENDS           chimera_check_overlaps
+            COMMENT           "[CHIMERA] Generating unified mixed-ISA ELF: ${UNIFIED_ELF}"
+            VERBATIM
+        )
+
+        add_custom_target(chimera_disassemble_unified_elf ALL
+            COMMAND ${CMAKE_OBJDUMP} -d ${UNIFIED_ELF} > ${UNIFIED_ELF}.dump
+            COMMAND ${CMAKE_OBJDUMP} -h ${UNIFIED_ELF} > ${UNIFIED_ELF}.sections
+            COMMAND ${CMAKE_NM}      -n ${UNIFIED_ELF} > ${UNIFIED_ELF}.symbols
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            DEPENDS chimera_merge_elf
+            COMMENT "[CHIMERA] Disassembling unified ELF: ${UNIFIED_ELF}"
+            VERBATIM
+        )
+
+        set(_footer_dep chimera_merge_elf chimera_disassemble_unified_elf)
+    endif()
+
+    # -----------------------------------------------------------------------
+    # 12. chimera_footer — build summary (depends on last post-build step)
+    # -----------------------------------------------------------------------
     add_custom_target(chimera_footer ALL
-        COMMAND ${CMAKE_COMMAND}
-                    -D "CHIMERA_BINARY_DIR=${CMAKE_BINARY_DIR}"
-                    -D "CHIMERA_LISTS_FILE=${CHIMERA_LISTS_FILE}"
-                    -P "${CMAKE_SOURCE_DIR}/cmake/scripts/PrintBuildFooter.cmake"
-        DEPENDS chimera_check_overlaps
-        COMMENT "[CHIMERA] Printing build footer"
+        COMMAND
+            ${CMAKE_COMMAND}
+            -D "CHIMERA_BINARY_DIR=${CMAKE_BINARY_DIR}"
+            -D "CHIMERA_LISTS_FILE=${CHIMERA_LISTS_FILE}"
+            -D "CHIMERA_UNIFIED_ELF=${CHIMERA_UNIFIED_ELF}"
+            -D "CHIMERA_UNIFIED_ELF_PATH=${CMAKE_BINARY_DIR}/chimera_unified.elf"
+            -P "${CMAKE_SOURCE_DIR}/cmake/scripts/PrintBuildFooter.cmake"
+        DEPENDS           ${_footer_dep}
+        COMMENT           "[CHIMERA] Printing build summary"
         VERBATIM
     )
 endfunction()
