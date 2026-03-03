@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: merge_elf (uv)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "/usr/bin/env",
+      "pythonArgs": [
+        "uv",
+        "run",
+        "python"
+      ],
+      "program": "/app/chimera/chimera-sdk-multi/scripts/merge_elf.py",
+      "args": [
+        "--device",
+        "/app/chimera/chimera-sdk-multi/build/devices/snitch_cluster_0/snitch_cluster_0.elf",
+        "--device",
+        "/app/chimera/chimera-sdk-multi/build/devices/snitch_cluster_1/snitch_cluster_1.elf",
+        "--host",
+        "/app/chimera/chimera-sdk-multi/build/host/host.elf",
+        "--output",
+        "/app/chimera/chimera-sdk-multi/build/chimera_unified.elf"
+      ],
+      "cwd": "/app/chimera/chimera-sdk-multi",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

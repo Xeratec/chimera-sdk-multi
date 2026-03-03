@@ -1,0 +1,26 @@
+{
+    "name": "Chimera SDK Multi",
+    "image": "ghcr.io/pulp-platform/deeploy:devel",
+    "remoteUser": "root",
+    "workspaceFolder": "/app/chimera/chimera-sdk-multi",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "ms-python.python"
+            ],
+            "settings": {
+                "cmake.configureOnOpen": true,
+                "cmake.sourceDirectory": "${workspaceFolder}"
+            }
+        }
+    },
+    "mounts": [
+        {
+        "source": "${localWorkspaceFolder}",
+        "target": "/app/chimera/chimera-sdk-multi",
+        "type": "bind"
+        }
+  ]
+}

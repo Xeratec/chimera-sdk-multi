@@ -63,7 +63,7 @@ docker exec chimera bash -c "
 ### With unified mixed-ISA ELF generation
 
 ```sh
-docker exec chimera bash -c "
+docker exec  bash -c "
    cd /app/chimera/chimera-sdk-multi &&
    export TOOLCHAIN_DIR=/app/install/llvm-18.1.4-pulp &&
    rm -rf build &&

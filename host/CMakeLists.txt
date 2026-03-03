@@ -5,6 +5,7 @@
 set(HOST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/crt0.S
     ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+
 )
 
 set(HOST_LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/link.ld.in)
@@ -23,4 +24,3 @@ add_host_binary(host
     DEVICE_SYMBOLS snitch_cluster_0_symbols snitch_cluster_1_symbols
     LAST_DEVICE    snitch_cluster_1
 )
-

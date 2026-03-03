@@ -4,10 +4,8 @@
 #ifndef CHIMERA_SHARED_H
 #define CHIMERA_SHARED_H
 
+#include "soc_addr_map.h"
 #include <stdint.h>
-
-/* Number of Snitch cluster devices */
-#define CHIMERA_NUM_CLUSTERS 2
 
 /*
  * Shared data structure exchanged between the host (CVA6, RV64) and all
@@ -27,13 +25,42 @@
  */
 typedef struct __attribute__((packed)) {
     /* Host sets host_to_device_flag[i] = 1 to signal cluster i to start. */
-    volatile uint32_t host_to_device_flag[CHIMERA_NUM_CLUSTERS];
+    volatile uint32_t host_to_device_flag[NUM_CLUSTERS];
 
     /* Cluster i sets device_to_host_flag[i] = 1 when it is done. */
-    volatile uint32_t device_to_host_flag[CHIMERA_NUM_CLUSTERS];
+    volatile uint32_t device_to_host_flag[NUM_CLUSTERS];
 
     /* General-purpose exchange buffer, one 16-word slot per cluster. */
-    volatile uint32_t data_payload[CHIMERA_NUM_CLUSTERS][16];
+    volatile uint32_t data_payload[NUM_CLUSTERS][16];
+
+    /**
+     * @brief Persistent trampoline function pointers for each cluster core.
+     *
+     * Each entry holds the function to be called by the trampoline on the
+     * corresponding core.
+     */
+    volatile uint32_t trampoline_function[NUM_CLUSTER_CORES];
+
+    /**
+     * @brief Persistent argument storage for each cluster core's trampoline
+     * function.
+     *
+     * Each entry holds the `void*` argument passed to the trampoline on the
+     * corresponding core.
+     */
+    volatile uint32_t trampoline_args[NUM_CLUSTER_CORES];
+
+    /**
+     * @brief Persistent stack pointer storage for each cluster core's trampoline
+     * context.
+     *
+     * Each entry holds the stack pointer to be loaded by the trampoline on the
+     * corresponding core.
+     */
+    volatile uint32_t trampoline_stack[NUM_CLUSTER_CORES];
+
 } chimera_shared_data_t;
+
+extern chimera_shared_data_t shared_data;
 
 #endif /* CHIMERA_SHARED_H */

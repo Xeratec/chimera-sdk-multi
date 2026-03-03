@@ -28,7 +28,7 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 try:
     import lief
@@ -36,14 +36,14 @@ except ImportError:
     print(
         "[CHIMERA] ERROR: 'lief' is not installed.\n"
         "Run:  uv sync   (or: pip install lief)",
-        file=sys.stderr,
+        file = sys.stderr,
     )
     sys.exit(1)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _name_from_path(path: Path) -> str:
     """Derive a human-readable binary name from an ELF file path.
@@ -62,11 +62,14 @@ def _seg_flag_str(flags: int) -> str:
 
 
 def _parse_elf(path: Path, label: str) -> lief.ELF.Binary:
-    binary = lief.parse(str(path))
+    config = lief.ELF.ParserConfig()
+    # Make sure we can insert sections with arbitrary virtual addresses
+    config.page_size = 4
+    binary = lief.ELF.parse(str(path), config = config)
     if binary is None:
         print(
             f"[CHIMERA] ERROR: lief could not parse {label} ELF: {path}",
-            file=sys.stderr,
+            file = sys.stderr,
         )
         sys.exit(1)
     return binary
@@ -77,20 +80,18 @@ def _print_elf_info(binary: lief.ELF.Binary, label: str) -> None:
     for sec in binary.sections:
         if sec.size == 0:
             continue
-        print(
-            f"[CHIMERA]    {sec.name:20} vma=0x{sec.virtual_address:016x}  "
-            f"size=0x{sec.size:08x}  flags={sec.flags_list} type={sec.type.name}"
-        )
+        print(f"[CHIMERA]    {sec.name:20} vma=0x{sec.virtual_address:016x}  "
+              f"size=0x{sec.size:08x}  flags={sec.flags_list} type={sec.type.name}")
     print(f"[CHIMERA] {label} segments:")
     for seg in binary.segments:
-        print(
-            f"[CHIMERA]    {seg.type.name:10} vma=0x{seg.virtual_address:016x}  "
-            f"size=0x{len(seg.content):08x}  flags={_seg_flag_str(int(seg.flags))}"
-        )
+        print(f"[CHIMERA]    {seg.type.name:10} vma=0x{seg.virtual_address:016x}  "
+              f"size=0x{len(seg.content):08x}  flags={_seg_flag_str(int(seg.flags))}")
+
 
 # ---------------------------------------------------------------------------
 # Core merge logic
 # ---------------------------------------------------------------------------
+
 
 def merge_elfs(
     host_path: Path,
@@ -109,60 +110,57 @@ def merge_elfs(
     print(f"[CHIMERA] Host   : {host_name}  ({host_path})")
 
     host = _parse_elf(host_path, "host")
-    host_class = (
-        "ELF64"
-        if host.header.identity_class == lief.ELF.Header.CLASS.ELF64
-        else "ELF32"
-    )
+    host_class = ("ELF64" if host.header.identity_class == lief.ELF.Header.CLASS.ELF64 else "ELF32")
     print(f"[CHIMERA]          {host_class}  e_machine={host.header.machine_type.name}")
 
     # Remove the .reserved section with type NOBITs
     reserved_sec = host.get_section(".reserved")
-    if reserved_sec and reserved_sec.type == lief.ELF.Section.TYPE.NOBITS:
-        print(f"[CHIMERA]          Removing .reserved section (type NOBITS)")
-        host.remove(reserved_sec)
-
-    print(f"[CHIMERA] ======= Before merging devices into host =======")
-    _print_elf_info(host, "host")
-    print(f"[CHIMERA] ------------------------------------------------------------")
-
-    # Prefix all host section names with "host" to avoid conflicts with device sections.
-    for sec in host.sections:
-        sec.name = f"{host_name}{sec.name}"
+    host.remove(reserved_sec)
 
     for dev_path in device_paths:
         dev_name = _name_from_path(dev_path)
         print(f"[CHIMERA] Device : {dev_name}  ({dev_path})")
 
-        _print_elf_info(_parse_elf(dev_path, f"device/{dev_name}"), f"device/{dev_name}")
+        # _print_elf_info(_parse_elf(dev_path, f"device/{dev_name}"), f"device/{dev_name}")
 
         device = _parse_elf(dev_path, f"device/{dev_name}")
-        dev_class = (
-            "ELF64"
-            if device.header.identity_class == lief.ELF.Header.CLASS.ELF64
-            else "ELF32"
-        )
-        print(
-            f"[CHIMERA]          {dev_class}  e_machine={device.header.machine_type.name}"
-        )
+        dev_class = ("ELF64" if device.header.identity_class == lief.ELF.Header.CLASS.ELF64 else "ELF32")
+        print(f"[CHIMERA]          {dev_class}  e_machine={device.header.machine_type.name}")
 
-        load_sections = [
-            sec
-            for sec in device.sections
-            if sec.type != lief.ELF.Section.TYPE.NOBITS and sec.size > 0 and sec.virtual_address != 0
+        sections = [
+            sec for sec in device.sections
+            if sec.size > 0 and sec.virtual_address != 0 and sec.name != ".reserved" and sec.name != ".common"
         ]
 
-        for sec in load_sections:
-            sec.name = f"{dev_name}{sec.name}"
+        load_segments = [
+            seg for seg in device.segments
+            if seg.type == lief.ELF.Segment.TYPE.LOAD and len(seg.content) > 0 and seg.virtual_address != 0
+        ]
 
-            
-            host.add(sec)
+        for seg in load_segments:
+            # Strip the execute flag (X) from device segments, marking them as "data" from the host ISA perspective.
+            # original_flags = int(seg.flags)
+            # new_flags = original_flags & ~int(lief.ELF.Segment.FLAGS.X)
+            # seg.raw_flags = new_flags
+            # print(f"[CHIMERA]          Embedding segment {dev_name} LOAD "
+            #       f"vma=0x{seg.virtual_address:016x}  size=0x{len(seg.content):08x} "
+            #       f"original_flags={_seg_flag_str(original_flags)} "
+            #       f"new_flags={_seg_flag_str(new_flags)}")
+            host.add(seg)
+
+        for sec in sections:
+            sec.name = f"{dev_name}{sec.name}"
+            # print(
+            #     f"[CHIMERA]          Embedding section {sec.name} "
+            #     f"vma=0x{sec.virtual_address:016x}  size=0x{sec.size:08x}  flags={sec.flags_list} type={sec.type.name}")
+            # sec.flags &= ~int(lief.ELF.Section.FLAGS.EXECINSTR)  # Clear the "executable" flag from device sections
+            host.add(sec, loaded = False, pos = lief.ELF.Binary.SEC_INSERT_POS.POST_SECTION)
 
     print(f"[CHIMERA] ======= After merging devices into host =======")
     _print_elf_info(host, "host")
     print(f"[CHIMERA] ------------------------------------------------------------")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents = True, exist_ok = True)
     host.write(str(output_path))
 
 
@@ -170,44 +168,42 @@ def merge_elfs(
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Chimera ELF merger — embed device binaries into the host ELF "
-            "as read-only (non-executable) LOAD segments."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  %(prog)s \\\n"
-            "    --host   build/host/host.elf \\\n"
-            "    --device build/devices/snitch_cluster_0/snitch_cluster_0.elf \\\n"
-            "    --device build/devices/snitch_cluster_1/snitch_cluster_1.elf \\\n"
-            "    --output build/chimera_unified.elf"
-        ),
+        description = ("Chimera ELF merger — embed device binaries into the host ELF "
+                       "as read-only (non-executable) LOAD segments."),
+        formatter_class = argparse.RawDescriptionHelpFormatter,
+        epilog = ("Example:\n"
+                  "  %(prog)s \\\n"
+                  "    --host   build/host/host.elf \\\n"
+                  "    --device build/devices/snitch_cluster_0/snitch_cluster_0.elf \\\n"
+                  "    --device build/devices/snitch_cluster_1/snitch_cluster_1.elf \\\n"
+                  "    --output build/chimera_unified.elf"),
     )
     parser.add_argument(
         "--host",
-        required=True,
-        metavar="ELF",
-        help="Path to the host ELF (used as base for the unified output)",
+        required = True,
+        metavar = "ELF",
+        help = "Path to the host ELF (used as base for the unified output)",
     )
     parser.add_argument(
         "--device",
-        action="append",
-        default=[],
-        metavar="ELF",
-        help="Path to a device ELF to embed (repeatable)",
+        action = "append",
+        default = [],
+        metavar = "ELF",
+        help = "Path to a device ELF to embed (repeatable)",
     )
     parser.add_argument(
-        "--output", "-o",
-        required=True,
-        metavar="ELF",
-        help="Output path for the unified ELF",
+        "--output",
+        "-o",
+        required = True,
+        metavar = "ELF",
+        help = "Output path for the unified ELF",
     )
     args = parser.parse_args()
 
-    host_path    = Path(args.host)
+    host_path = Path(args.host)
     device_paths = [Path(d) for d in args.device]
 
     # Validate all inputs exist before doing any work
@@ -216,16 +212,16 @@ def main() -> int:
         print(
             "[CHIMERA] ERROR: The following ELF files do not exist "
             "(binaries not yet built?):",
-            file=sys.stderr,
+            file = sys.stderr,
         )
         for m in missing:
-            print(f"  {m}", file=sys.stderr)
+            print(f"  {m}", file = sys.stderr)
         return 1
 
     merge_elfs(
-        host_path=host_path,
-        device_paths=device_paths,
-        output_path=Path(args.output),
+        host_path = host_path,
+        device_paths = device_paths,
+        output_path = Path(args.output),
     )
     return 0
 

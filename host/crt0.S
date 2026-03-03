@@ -23,10 +23,10 @@ _start:
     .option pop
 
     // Store existing stack, global, return pointers on new stack
-    addi sp, sp, -24
-    sd ra, 16(sp)
-    sd gp, 8(sp)
-    sd sp, 0(sp)
+    addi sp, sp, -12
+    sw ra, 8(sp)
+    sw gp, 4(sp)
+    sw sp, 0(sp)
 
     // Set trap vector
     la t0, _trap_handler_wrap
@@ -39,15 +39,15 @@ _start:
     li a0, 0
 
 _zero_bss_loop:
-    addi t4, t2, -32
+    addi t4, t2, -16
     blez t2, _fp_init
     blt t4, x0, _zero_bss_rem
-    sd a0, 0(t0)
-    sd a0, 8(t0)
-    sd a0, 16(t0)
-    sd a0, 24(t0)
-    addi t2, t2, -32
-    addi t0, t0, 32
+    sw a0, 0(t0)
+    sw a0, 4(t0)
+    sw a0, 8(t0)
+    sw a0, 12(t0)
+    addi t2, t2, -16
+    addi t0, t0, 16
     bgt t2, x0, _zero_bss_loop
     j _fp_init
 
@@ -69,57 +69,57 @@ _fp_init:
 .global _exit
 _exit:
     // Restore the original context registers
-    ld ra, 16(sp)
-    ld gp, 8(sp)
-    ld sp, 0(sp)
+    lw ra, 8(sp)
+    lw gp, 4(sp)
+    lw sp, 0(sp)
     // Save return value and exit
     slli t0, a0, 1
     ori  t0, t0, 1
     la t1, __base_regs
-    sd t0, 16(t1)
+    sw t0, 8(t1)
     ebreak
     ret
 
 // Trap handler wrapper
 .align 4
 _trap_handler_wrap:
-    addi sp, sp, -128
-    sd ra, 120(sp)
-    sd t0, 112(sp)
-    sd t1, 104(sp)
-    sd t2, 96(sp)
-    sd a0, 88(sp)
-    sd a1, 80(sp)
-    sd a2, 72(sp)
-    sd a3, 64(sp)
-    sd a4, 56(sp)
-    sd a5, 48(sp)
-    sd a6, 40(sp)
-    sd a7, 32(sp)
-    sd t3, 24(sp)
-    sd t4, 16(sp)
-    sd t5, 8(sp)
-    sd t6, 0(sp)
+    addi sp, sp, -64
+    sw ra, 60(sp)
+    sw t0, 56(sp)
+    sw t1, 52(sp)
+    sw t2, 48(sp)
+    sw a0, 44(sp)
+    sw a1, 40(sp)
+    sw a2, 36(sp)
+    sw a3, 32(sp)
+    sw a4, 28(sp)
+    sw a5, 24(sp)
+    sw a6, 20(sp)
+    sw a7, 16(sp)
+    sw t3, 12(sp)
+    sw t4, 8(sp)
+    sw t5, 4(sp)
+    sw t6, 0(sp)
 
     jal trap_vector
 
-    ld ra, 120(sp)
-    ld t0, 112(sp)
-    ld t1, 104(sp)
-    ld t2, 96(sp)
-    ld a0, 88(sp)
-    ld a1, 80(sp)
-    ld a2, 72(sp)
-    ld a3, 64(sp)
-    ld a4, 56(sp)
-    ld a5, 48(sp)
-    ld a6, 40(sp)
-    ld a7, 32(sp)
-    ld t3, 24(sp)
-    ld t4, 16(sp)
-    ld t5, 8(sp)
-    ld t6, 0(sp)
-    addi sp, sp, 128
+    lw ra, 60(sp)
+    lw t0, 56(sp)
+    lw t1, 52(sp)
+    lw t2, 48(sp)
+    lw a0, 44(sp)
+    lw a1, 40(sp)
+    lw a2, 36(sp)
+    lw a3, 32(sp)
+    lw a4, 28(sp)
+    lw a5, 24(sp)
+    lw a6, 20(sp)
+    lw a7, 16(sp)
+    lw t3, 12(sp)
+    lw t4, 8(sp)
+    lw t5, 4(sp)
+    lw t6, 0(sp)
+    addi sp, sp, 64
     mret
 
 .weak trap_vector

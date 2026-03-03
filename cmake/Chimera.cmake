@@ -124,7 +124,7 @@ function(add_device_binary TARGET_NAME)
     # -----------------------------------------------------------------------
     add_custom_command(
         OUTPUT  ${TARGET_NAME}.dump
-        COMMAND ${CMAKE_OBJDUMP} -d  ${TARGET_NAME}.elf > ${TARGET_NAME}.dump
+        COMMAND ${CMAKE_OBJDUMP} -S  ${TARGET_NAME}.elf > ${TARGET_NAME}.dump
         COMMAND ${CMAKE_OBJDUMP} -h  ${TARGET_NAME}.elf > ${TARGET_NAME}.sections
         COMMAND ${CMAKE_NM}      -n  ${TARGET_NAME}.elf > ${TARGET_NAME}.symbols
         DEPENDS ${TARGET_NAME}.elf
@@ -331,7 +331,7 @@ function(add_host_binary TARGET_NAME)
         -T${GEN_LINK_LD}
         -Wl,--build-id=none
         # -rtlib=compiler-rt
-        -lclang_rt.builtins-riscv64
+        -lclang_rt.builtins-riscv32
     )
 
     target_link_directories(${TARGET_NAME}.elf PRIVATE
@@ -364,7 +364,7 @@ function(add_host_binary TARGET_NAME)
     # -----------------------------------------------------------------------
     add_custom_command(
         OUTPUT  ${TARGET_NAME}.dump
-        COMMAND ${CMAKE_OBJDUMP} -d ${TARGET_NAME}.elf > ${TARGET_NAME}.dump
+        COMMAND ${CMAKE_OBJDUMP} -S ${TARGET_NAME}.elf > ${TARGET_NAME}.dump
         COMMAND ${CMAKE_OBJDUMP} -h ${TARGET_NAME}.elf > ${TARGET_NAME}.sections
         COMMAND ${CMAKE_NM}      -n ${TARGET_NAME}.elf > ${TARGET_NAME}.symbols
         DEPENDS ${TARGET_NAME}.elf
@@ -412,6 +412,11 @@ function(add_host_binary TARGET_NAME)
     # 9. Build --binary <name> <file> argument list for the overlap checker.
     # -----------------------------------------------------------------------
     set(_check_args "")
+
+    if (VERBOSE)
+        list(APPEND _check_args "--verbose")
+    endif()
+
     math(EXPR _last_idx "${_n_bins} - 1")
     foreach(_i RANGE ${_last_idx})
         list(GET ALL_SECTION_FILES ${_i} _sf)
@@ -467,7 +472,7 @@ function(add_host_binary TARGET_NAME)
         )
 
         add_custom_target(chimera_disassemble_unified_elf ALL
-            COMMAND ${CMAKE_OBJDUMP} -d ${UNIFIED_ELF} > ${UNIFIED_ELF}.dump
+            COMMAND ${CMAKE_OBJDUMP} -S ${UNIFIED_ELF} > ${UNIFIED_ELF}.dump
             COMMAND ${CMAKE_OBJDUMP} -h ${UNIFIED_ELF} > ${UNIFIED_ELF}.sections
             COMMAND ${CMAKE_NM}      -n ${UNIFIED_ELF} > ${UNIFIED_ELF}.symbols
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

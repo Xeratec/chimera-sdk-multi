@@ -27,17 +27,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Section:
-    binary: str    # display name of the owning binary
-    name: str      # ELF section name (e.g. ".text", ".data")
-    start: int     # VMA start address (inclusive)
-    end: int       # VMA end address   (exclusive, = start + size)
+    binary: str  # display name of the owning binary
+    name: str  # ELF section name (e.g. ".text", ".data")
+    start: int  # VMA start address (inclusive)
+    end: int  # VMA end address   (exclusive, = start + size)
     sec_type: str  # type string from objdump: TEXT, DATA, BSS, …
 
 
@@ -55,11 +55,11 @@ class Section:
 #
 # The VMA width differs between 32- and 64-bit ELFs; the regex accepts both.
 _SECTION_RE = re.compile(
-    r'^\s+\d+\s+'         # leading whitespace + index
-    r'(\S+)\s+'           # (1) section name
+    r'^\s+\d+\s+'  # leading whitespace + index
+    r'(\S+)\s+'  # (1) section name
     r'([0-9a-fA-F]+)\s+'  # (2) size  (hex)
     r'([0-9a-fA-F]+)\s+'  # (3) VMA   (hex)
-    r'([A-Z]+)',           # (4) type  (TEXT / DATA / BSS / …)
+    r'([A-Z]+)',  # (4) type  (TEXT / DATA / BSS / …)
     re.MULTILINE,
 )
 
@@ -70,28 +70,29 @@ def parse_sections_file(path: Path, binary_name: str) -> List[Section]:
         print(
             f"[CHIMERA] WARNING: sections file not found "
             f"(binary not yet built?): {path}",
-            file=sys.stderr,
+            file = sys.stderr,
         )
         return []
 
     sections: List[Section] = []
     for m in _SECTION_RE.finditer(path.read_text()):
         sec_name = m.group(1)
-        size     = int(m.group(2), 16)
-        vma      = int(m.group(3), 16)
+        size = int(m.group(2), 16)
+        vma = int(m.group(3), 16)
         sec_type = m.group(4)
 
         # Skip empty sections and metadata sections (VMA == 0 → debug/reloc)
-        if size == 0 or vma == 0:
+        if vma == 0:
             continue
 
-        sections.append(Section(
-            binary   = binary_name,
-            name     = sec_name,
-            start    = vma,
-            end      = vma + size,
-            sec_type = sec_type,
-        ))
+        sections.append(
+            Section(
+                binary = binary_name,
+                name = sec_name,
+                start = vma,
+                end = vma + size,
+                sec_type = sec_type,
+            ))
 
     return sections
 
@@ -100,7 +101,8 @@ def parse_sections_file(path: Path, binary_name: str) -> List[Section]:
 # Memory-map printer
 # ---------------------------------------------------------------------------
 
-def print_memory_map(all_sections: List[Section], verbose=False) -> None:
+
+def print_memory_map(all_sections: List[Section], verbose = False) -> None:
     """Print a memory map table sorted by VMA."""
     print("[CHIMERA] ===================================================================")
     print("[CHIMERA]  Memory Map  (all non-empty sections, sorted by VMA)")
@@ -109,22 +111,18 @@ def print_memory_map(all_sections: List[Section], verbose=False) -> None:
     print("[CHIMERA] ---------------------------------------------------------------------------")
 
     for sec in all_sections:
-        size      = sec.end - sec.start
+        size = sec.end - sec.start
         start_hex = f"0x{sec.start:016x}"
-        end_hex   = f"0x{sec.end:016x}"
-        size_hex  = f"0x{size:08x}"
-        tag       = "" if sec.sec_type in ("TEXT", "DATA") else "  [shared/NOLOAD]"
+        end_hex = f"0x{sec.end:016x}"
+        size_hex = f"0x{size:08x}"
+        tag = "" if sec.sec_type in ("TEXT", "DATA") else "  [shared/NOLOAD]"
 
         if sec.sec_type in ("TEXT", "DATA"):
-            print(
-                f"[CHIMERA]  {start_hex}  {end_hex}  {size_hex:>10s}"
-                f"  {sec.sec_type:<4s}  {sec.binary} / {sec.name}{tag}"
-            )
+            print(f"[CHIMERA]  {start_hex}  {end_hex}  {size_hex:>10s}"
+                  f"  {sec.sec_type:<4s}  {sec.binary} / {sec.name}{tag}")
         elif verbose:
-            print(
-                f"[CHIMERA]  {start_hex}  {end_hex}  {size_hex:>10s}"
-                f"  {sec.sec_type:<4s}  {sec.binary} / {sec.name}{tag}"
-            )
+            print(f"[CHIMERA]  {start_hex}  {end_hex}  {size_hex:>10s}"
+                  f"  {sec.sec_type:<4s}  {sec.binary} / {sec.name}{tag}")
 
     print("[CHIMERA] ===================================================================")
 
@@ -132,6 +130,7 @@ def print_memory_map(all_sections: List[Section], verbose=False) -> None:
 # ---------------------------------------------------------------------------
 # Overlap detector
 # ---------------------------------------------------------------------------
+
 
 def check_overlaps(loaded: List[Section]) -> bool:
     """Check all pairs of loaded (TEXT/DATA) sections from *different* binaries.
@@ -157,7 +156,7 @@ def check_overlaps(loaded: List[Section]) -> bool:
                     f"[CHIMERA] OVERLAP: {a.binary} / {a.name} "
                     f"[0x{a.start:x}, 0x{a.end:x}) overlaps "
                     f"{b.binary} / {b.name} [0x{b.start:x}, 0x{b.end:x})",
-                    file=sys.stderr,
+                    file = sys.stderr,
                 )
                 found = True
 
@@ -168,31 +167,30 @@ def check_overlaps(loaded: List[Section]) -> bool:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Chimera section-overlap checker — "
-            "Python port of cmake/scripts/CheckSectionOverlaps.cmake"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Example:\n"
-            "  %(prog)s \\\n"
-            "    --binary build/devices/snitch_cluster_0/snitch_cluster_0.sections \\\n"
-            "    --binary build/devices/snitch_cluster_1/snitch_cluster_1.sections \\\n"
-            "    --binary build/host/host.sections"
-        ),
+        description = ("Chimera section-overlap checker — "
+                       "Python port of cmake/scripts/CheckSectionOverlaps.cmake"),
+        formatter_class = argparse.RawDescriptionHelpFormatter,
+        epilog = ("Example:\n"
+                  "  %(prog)s \\\n"
+                  "    --binary build/devices/snitch_cluster_0/snitch_cluster_0.sections \\\n"
+                  "    --binary build/devices/snitch_cluster_1/snitch_cluster_1.sections \\\n"
+                  "    --binary build/host/host.sections"),
     )
     parser.add_argument(
-        "--binary", "-b",
-        action="append",
-        required=True,
-        help="Binary name and its llvm-objdump -h sections file (repeatable)",
+        "--binary",
+        "-b",
+        action = "append",
+        required = True,
+        help = "Binary name and its llvm-objdump -h sections file (repeatable)",
     )
     parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Also print non-loaded sections (e.g. BSS, NOLOAD) in the memory map",
+        "--verbose",
+        "-v",
+        action = "store_true",
+        help = "Also print non-loaded sections (e.g. BSS, NOLOAD) in the memory map",
     )
     args = parser.parse_args()
 
@@ -206,9 +204,9 @@ def main() -> int:
         return 0
 
     # Sort by VMA start; use (binary, name) as tiebreaker for stable output
-    all_sections.sort(key=lambda s: (s.start, s.binary, s.name))
+    all_sections.sort(key = lambda s: (s.start, s.binary, s.name))
 
-    print_memory_map(all_sections, verbose=args.verbose)
+    print_memory_map(all_sections, verbose = args.verbose)
 
     # Overlap check is limited to TEXT and DATA sections
     loaded = [s for s in all_sections if s.sec_type in ("TEXT", "DATA")]
@@ -219,7 +217,7 @@ def main() -> int:
             "[CHIMERA] ERROR: Section overlaps detected — see warnings above.\n"
             "Verify the placement chain in cmake/ChimeraUtils.cmake and "
             "each device's __device_end symbol.",
-            file=sys.stderr,
+            file = sys.stderr,
         )
         return 1
 
