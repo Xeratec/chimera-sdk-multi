@@ -78,10 +78,10 @@ int snitchCluster_busy(uint8_t clusterId) {
  */
 void wait_snitchCluster_busy(uint8_t CLUSTER) {
     while (snitchCluster_busy(CLUSTER) == 1);
-    for (int i = 0; i < 100; i++) {
-        asm volatile("addi x0, x0, 0\n" :::);
-    }
-
+    // The core acltually may still be busy doing work, but the busy flag is cleared at the end of
+    // bootrom execution. So we add a small delay here to ensure the core has time to clear the busy
+    // flag before we proceed.
+    for (volatile int i = 0; i < 100; i++);
     return;
 }
 
@@ -139,6 +139,14 @@ void set_snitchCluster_reset(uint8_t CLUSTER, bool enable) {
     default:
         break;
     }
+
+    // if (!enable) {
+    //     // Wait for the cores to boot up and clear the busy flag (bootrom sets busy=1 at the end
+    //     of boot) for (volatile int i = 0; i < 2500; i++);
+    // } else {
+    //     // Wait for the cores to reset and set the busy flag (bootrom sets busy=0 at the
+    //     beginning of boot) for (volatile int i = 0; i < 100; i++);
+    // }
 }
 
 #define CLUSTER 0
@@ -154,7 +162,6 @@ int main(void) {
     set_snitchCluster_clockGating(CLUSTER, 0);
 
     set_snitchCluster_reset(CLUSTER, 1);
-    for (volatile int i = 0; i < 10; i++);
     set_snitchCluster_reset(CLUSTER, 0);
 
     /* Inspect device entry points (address reference keeps symbols alive) */
@@ -179,7 +186,10 @@ int main(void) {
 
     shared_data.host_to_device_flag[0] = 1;
 
-    while (!shared_data.device_to_host_flag[0]);
+    while (!shared_data.device_to_host_flag[0]) {
+        // Flush the d-cache
+        asm volatile("fence" :::);
+    }
 
     wait_snitchCluster_busy(CLUSTER);
     /*

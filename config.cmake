@@ -4,10 +4,10 @@
 ############################
 # Host configuration
 ############################
-set(ISA_HOST rv32imc)
-set(ABI_HOST ilp32)
-set(COMPILER_RT_HOST rv32imc)
-set(CROSS_COMPILE_HOST "riscv32-unknown-elf")
+set(ABI_HOST lp64d)
+set(ISA_HOST rv64imafdc_zifencei)
+set(COMPILER_RT_HOST rv64imafdc)
+set(CROSS_COMPILE_HOST "riscv64-unknown-elf")
 
 ############################
 # Device configuration

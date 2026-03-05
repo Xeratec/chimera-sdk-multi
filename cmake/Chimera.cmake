@@ -331,7 +331,7 @@ function(add_host_binary TARGET_NAME)
         -T${GEN_LINK_LD}
         -Wl,--build-id=none
         # -rtlib=compiler-rt
-        -lclang_rt.builtins-riscv32
+        -lclang_rt.builtins-riscv64
     )
 
     target_link_directories(${TARGET_NAME}.elf PRIVATE
