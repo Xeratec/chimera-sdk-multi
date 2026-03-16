@@ -53,7 +53,7 @@ SECTIONS {
     . = . + (__@CHIMERA_LAST_DEVICE@_end - ORIGIN(memisl));
   } > memisl
 
-  .text : {
+  .text : ALIGN(0x1000) {
     *(.text._start)
     *(.text)
     *(.text.*)

@@ -53,7 +53,7 @@ SECTIONS {
 
 @CHIMERA_RESERVED_SECTION@
 
-  .init : {
+  .init : ALIGN(0x1000) {
     *(.init)
     *(.init.*)
   } > memisl
@@ -88,5 +88,5 @@ SECTIONS {
     __bss_end = .;
   } > memisl
 
-  __device_end = ALIGN(0x1000);
+  __device_end = .;
 }

@@ -10,6 +10,8 @@
  */
 chimera_shared_data_t shared_data __attribute__((section(".common")));
 
+chimera_shared_data_t shared_data2 __attribute__((section(".common")));
+
 int main(void) {
     /* Wait for host to signal that work is ready for cluster 1 */
     while (!shared_data.host_to_device_flag[1]);
@@ -19,6 +21,8 @@ int main(void) {
 
     /* Signal host that cluster 1 is done */
     shared_data.device_to_host_flag[1] = 1;
+
+    shared_data2.device_to_host_flag[1] = 1;
 
     return 0;
 }
